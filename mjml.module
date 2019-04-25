@@ -145,6 +145,9 @@ function mjml_mail(string $key, array &$message, array $params): void {
     // @see swiftmailer/templates/swiftmailer.html.twig
     $message['params']['theme'] = 'swiftmailer_reset';
     $message['subject'] = t('MJML Test email - from a MJML + Twig template file sent by SwiftMailer', $options);
+    // This has to be a markup object otherwise SwiftMailer escapes HTML
+    // tags.
+    // @see \Drupal\swiftmailer\Plugin\Mail\SwiftMailer::massageMessageBody()
     $message['body'][] = Markup::create(Drupal::service('twig')->render(drupal_get_path('module', 'mjml') . '/examples/example.mjml.twig', $body_params));
   }
 
