@@ -1,0 +1,39 @@
+<?php
+
+/**
+ * @file
+ * Install, update and uninstall functions for the MJML module.
+ */
+
+/**
+ * Implements hook_install().
+ */
+function mjml_install() {
+  // Default configuration for MJML test emails.
+  $config = \Drupal::configFactory()->getEditable('system.mail');
+  $configuration = $config->get('interface') ?? [];
+  $configuration['test_mail_mjml_template'] = 'mjml_mailer';
+  $configuration['test_mail_mjml_twig_template'] = 'mjml_mailer';
+  $config->set('interface', $configuration)->save(TRUE);
+  /** @var \Drupal\Core\Extension\ModuleHandlerInterface $module_handler */
+  $module_handler = \Drupal::moduleHandler();
+  // Additional configuration for the Mail System if enabled.
+  if ($module_handler->moduleExists('mailsystem')) {
+    _mjml_configure_mailsystem();
+
+    // SwiftMailer depends on the Mail System module.
+    if ($module_handler->moduleExists('swiftmailer')) {
+      _mjml_configure_mailsystem_with_swiftmailer();
+    }
+  }
+}
+
+/**
+ * Implements hook_uninstall().
+ */
+function mjml_uninstall() {
+  $config = \Drupal::configFactory()->getEditable('system.mail');
+  $configuration = $config->get('interface') ?? [];
+  unset($configuration['test_mail_mjml_template'], $configuration['test_mail_mjml_template']);
+  $config->set('interface', $configuration)->save(TRUE);
+}

@@ -1,0 +1,17 @@
+services:
+  logger.channel.mjml:
+    parent: logger.channel_base
+    arguments: ['mjml']
+
+  mjml.renderer.default:
+    class: Drupal\mjml\Renderer\DefaultMjmlRenderer
+    arguments:
+      ['@settings']
+    calls:
+      - [setContainer, ['@service_container']]
+
+  mjml.twig.extension:
+    class: NotFloran\MjmlBundle\Twig\Extension
+    arguments: ['@mjml.renderer.default']
+    tags:
+      - { name: twig.extension}

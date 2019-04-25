@@ -1,0 +1,151 @@
+<?php
+
+/**
+ * @file
+ * Contains mjml.module.
+ */
+
+use Drupal\Component\Utility\Random;
+use Drupal\Core\Render\Markup;
+use Drupal\mjml\Plugin\Mail\MjmlMailer;
+
+/**
+ * Implements hook_modules_installed().
+ */
+function mjml_modules_installed($modules) {
+  if (in_array('mailsystem', $modules, TRUE)) {
+    _mjml_configure_mailsystem();
+  }
+
+  if (in_array('swiftmailer', $modules, TRUE)) {
+    _mjml_configure_mailsystem_with_swiftmailer();
+  }
+}
+
+/**
+ * Configures Mail System to use MJML mailer for MJML test emails as formatter.
+ *
+ * Make sure that MJML test mails are still being sent out by using the
+ * MJML Mailer as the formatter when MailSystem module is installed.
+ *
+ * @see mjml_mail()
+ */
+function _mjml_configure_mailsystem(): void {
+  $settings = Drupal::configFactory()->getEditable('mailsystem.settings');
+  $settings->set('modules.mjml.none', [
+    'formatter' => 'mjml_mailer',
+  ])->save();
+}
+
+/**
+ * Configures Mail System to properly send out MJML test email with Swiftmailer.
+ *
+ * Demonstrate that it also possible to send out emails from MJML + Twig
+ * templates without using the MJML mailer as a formatter with Swiftmailer.
+ *
+ * @see mjml_mail()
+ */
+function _mjml_configure_mailsystem_with_swiftmailer(): void {
+  $settings = Drupal::configFactory()->getEditable('mailsystem.settings');
+  $settings->set('modules.mjml.test_mail_mjml_twig_template_swiftmailer', [
+    'formatter' => 'swiftmailer',
+    'sender' => 'swiftmailer',
+  ])->save();
+}
+
+/**
+ * Implements hook_theme().
+ */
+function mjml_theme($existing, $type, $theme, $path) {
+  return [
+    'swiftmailer_reset' => [
+      'variables' => [
+        'message' => [],
+      ],
+      'mail theme' => TRUE,
+    ],
+  ];
+}
+
+/**
+ * Implements hook_mail().
+ */
+function mjml_mail(string $key, array &$message, array $params): void {
+  $options = [
+    'langcode' => $message['langcode'],
+  ];
+
+  $random = new Random();
+  $body_params = $params + [
+    'name' => Drupal::config('system.site')->get('name'),
+    'message' => $random->paragraphs(3),
+  ];
+
+  // Always the MJML Mailer is being used for these mails because we configured
+  // it in the mjml_install() and in mjml_modules_installed().
+  if (in_array($key, ['test_mail_mjml_template', 'test_mail_mjml_twig_template'])) {
+    $message['from'] = Drupal::config('system.site')->get('mail');
+
+    if ($key === 'test_mail_mjml_template') {
+      $body = file_get_contents(drupal_get_path('module', 'mjml') . '/examples/example.mjml');
+      $message['subject'] = t('MJML Test email - from an inline MJML template', $options);
+      // This Content-Type tells the MJML mailer that the message body contains
+      // an MJML template that needs to be transformed to HTML before it is
+      // being sent.
+      // @see \Drupal\mjml\Plugin\Mail\MjmlMailer::format()
+      $message['headers']['Content-Type'] = MjmlMailer::CONTENT_TYPE_MJML;
+      // Poor man's variable replacement solution... see the next branch for a
+      // better option.
+      $replacements = array_reduce(array_keys($body_params), function (array $carry, string $item) use ($body_params) {
+        $carry["{{ {$item} }}"] = $body_params[$item];
+        return $carry;
+      }, []);
+      foreach ($replacements as $variable => $replacement) {
+        $body = str_replace($variable, $replacement, $body);
+      }
+      $message['body'][] = $body;
+    }
+    elseif ($key === 'test_mail_mjml_twig_template') {
+      $message['subject'] = t('MJML Test email - from a MJML + Twig template file', $options);
+      // This Content-Type tells the MJML mailer that the message body contains
+      // an already transformed MJML template to HTML so only the content header
+      // needs to be changed.
+      // @see \Drupal\mjml\Plugin\Mail\MjmlMailer::format()
+      // This header is also important because it ensures that the PHPMail's
+      // formatter is not being called. The default PHPmail mail
+      // handler strips out all HTML tags from the email body so it is
+      // recommended to install and use a contrib module that can handle HTML
+      // mail body correctly.
+      // @see \Drupal\Core\Mail\Plugin\Mail\PhpMail::format()
+      // If you install the SwiftMailer module for example,
+      // make sure the you still select the MJML Mailer as a formatter at
+      // admin/config/system/mailsystem otherwise MJML does not get transformed
+      // to HTML. If you set the Content-Type to "text/html" that is also
+      // not good enough, because SwiftMailer may also strips out the HTML tags
+      // from the message unless it is a markup. (See the last elseif for more
+      // details.)
+      // @see \Drupal\swiftmailer\Plugin\Mail\SwiftMailer::massageMessageBody()
+      $message['headers']['Content-Type'] = MjmlMailer::CONTENT_TYPE_MJML_TWIG;
+      // Twig performs the variable replacement and the MJML => HTML
+      // transformation here because the file contains the {% mjml %} and
+      // {% endmjml %} tags.
+      // @see \NotFloran\MjmlBundle\Twig\Extension
+      $message['body'][] = Drupal::service('twig')->render(drupal_get_path('module', 'mjml') . '/examples/example.mjml.twig', $body_params);
+    }
+  }
+  elseif ($key === 'test_mail_mjml_twig_template_swiftmailer') {
+    // Tell SwiftMailer that this is an HTML email even if
+    // "Respect provided e-mail format" is disabled.
+    $message['params']['format'] = 'text/html';
+    // When "Respect provided e-mail format" is enabled this should be enough.
+    $message['headers']['Content-Type'] = 'text/html';
+    // Do not apply the swiftmailer theme on the message body because it already
+    // contains the complete HTML page.
+    // @see \Drupal\swiftmailer\Plugin\Mail\SwiftMailer::format()
+    // @see swiftmailer/templates/swiftmailer.html.twig
+    $message['params']['theme'] = 'swiftmailer_reset';
+    $message['subject'] = t('MJML Test email - from a MJML + Twig template file sent by SwiftMailer', $options);
+    $message['body'][] = Markup::create(Drupal::service('twig')->render(drupal_get_path('module', 'mjml') . '/examples/example.mjml.twig', $body_params));
+  }
+
+}

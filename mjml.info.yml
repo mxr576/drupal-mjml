@@ -1,0 +1,9 @@
+name: 'MJML'
+description: 'Create responsive HTML emails with mjml.io.'
+package: Mail
+
+type: module
+core: 8.x
+
+dependencies:
+  - drupal:system (>=8.6.0)

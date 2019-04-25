@@ -1,0 +1,23 @@
+{
+    "name": "drupal/mjml",
+    "type": "drupal-module",
+    "description": "Create responsive HTML emails with mjml.io.",
+    "keywords": [
+        "mjml",
+        "email",
+        "html email"
+    ],
+    "license": "GPL-2.0+",
+    "homepage": "https://www.drupal.org/project/mjml",
+    "minimum-stability": "dev",
+    "prefer-stable": true,
+    "support": {
+        "issues": "https://github.com/mxr576/drupal-mjml/issues",
+        "source": "https://github.com/mxr576/drupal-mjml"
+    },
+    "require": {
+        "php": "^7.1.0",
+        "drupal/core": "^8.6",
+        "notfloran/mjml-bundle": "dev-master#8e1623a"
+    }
+}
